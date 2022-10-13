@@ -5,7 +5,7 @@ on: workflow_dispatch
 env:
   AZURE_REGION: eastus2
   RESOURCE_GROUP_NAME: Ignite2022_MC
-  AZURE_WEBAPP_NAME: wapp-macc76
+  AZURE_WEBAPP_NAME: wapp-mc01
   AZURE_WEBAPP_PACKAGE_PATH: '.'
   DOTNET_VERSION: '6.0.x'
   IGNITE2022MX_ARTIFACT: ignite2022mx-app
