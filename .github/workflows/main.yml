@@ -1,0 +1,20 @@
+name: Deploy PoC Env
+
+on: workflow_dispatch
+
+env:
+  AZURE_REGION: eastus2
+  RESOURCE_GROUP_NAME: Ignite2022_MC
+
+jobs:
+
+  create_azure_rg:
+    runs-on: ubuntu-latest
+    steps:
+    
+    - uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+    
+    - run: |
+        az group create --location ${{ env.AZURE_REGION }} --name ${{ env.RESOURCE_GROUP_NAME }}
