@@ -48,7 +48,7 @@ jobs:
         # parameters: appName=<Type a unique name for yor webapp>
         parameters: ./IaC/parameters-appservice.json
         
-ci:
+  ci:
     runs-on: windows-latest
     if: ${{ success() }}
     needs: appservice-bicep-template-deploy
