@@ -5,6 +5,10 @@ on: workflow_dispatch
 env:
   AZURE_REGION: eastus2
   RESOURCE_GROUP_NAME: Ignite2022_MC
+  AZURE_WEBAPP_NAME: wapp-macc76
+  AZURE_WEBAPP_PACKAGE_PATH: '.'
+  DOTNET_VERSION: '6.0.x'
+  IGNITE2022MX_ARTIFACT: ignite2022mx-app
 
 jobs:
 
@@ -18,3 +22,99 @@ jobs:
     
     - run: |
         az group create --location ${{ env.AZURE_REGION }} --name ${{ env.RESOURCE_GROUP_NAME }}
+        
+  appservice-bicep-template-deploy:
+    runs-on: ubuntu-latest
+    if: ${{success()}}
+    needs: create_azure_rg
+    
+    steps:
+
+      # Checkout code
+    - uses: actions/checkout@main
+
+      # Log into Azure
+    - uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      # Deploy Bicep template
+    - name: Deploy Bicep Template
+      uses: azure/arm-deploy@v1
+      with:
+        subscriptionId: ${{ secrets.AZURE_SUBSCRIPTION }}
+        resourceGroupName: ${{ env.RESOURCE_GROUP_NAME }}
+        template: ./IaC/deploy-appservice.bicep
+        # parameters: appName=<Type a unique name for yor webapp>
+        parameters: ./IaC/parameters-appservice.json
+        
+ci:
+    runs-on: windows-latest
+    if: ${{ success() }}
+    needs: appservice-bicep-template-deploy
+    
+    steps:
+      # Checkout the repo
+      - uses: actions/checkout@main
+      - uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      
+      # Setup .NET Core SDK
+      - name: Setup .NET Core
+        uses: actions/setup-dotnet@v1
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }} 
+      
+      # Run dotnet build and publish
+      - name: dotnet build and publish
+        run: |
+          dotnet restore
+          dotnet build --configuration Release
+          dotnet publish -c Release -o '${{ env.AZURE_WEBAPP_PACKAGE_PATH }}/myapp' 
+          
+      # Deploy to Azure Web apps
+      - name: 'Run Azure webapp deploy action using publish profile credentials'
+        uses: azure/webapps-deploy@v2
+        with: 
+          app-name: ${{ env.AZURE_WEBAPP_NAME }} # Replace with your app name
+          package: '${{ env.AZURE_WEBAPP_PACKAGE_PATH }}/myapp'
+          
+      - uses: actions/upload-artifact@v3
+        with:
+          name: ${{ env.IGNITE2022MX_ARTIFACT }}
+          path: ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}/myapp
+          
+  cd:
+    runs-on: windows-latest
+    if: ${{ success() }}
+    needs: ci
+    environment:
+      name: 'Production'
+      url: ${{ steps.deploy-to-webapp.outputs.webapp-url }}
+      
+    steps:
+        # Checkout the repo
+      - uses: actions/checkout@main
+      - uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+            
+      - uses: actions/download-artifact@v3
+        with:
+          name: ${{ env.IGNITE2022MX_ARTIFACT }}
+          path: ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}/myapp
+            
+         # Deploy to Azure Web apps
+      - name: 'Run Azure webapp deploy action using publish profile credentials'
+        id: deploy-to-webapp
+        uses: azure/webapps-deploy@v2
+        with: 
+          app-name: ${{ env.AZURE_WEBAPP_NAME }} # Replace with your app name
+          package: '${{ env.AZURE_WEBAPP_PACKAGE_PATH }}/myapp'
+      
+      - name: logout
+        run: |
+          az logout
+  
